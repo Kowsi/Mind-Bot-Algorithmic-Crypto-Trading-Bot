@@ -21,7 +21,7 @@ import dash_daq as daq
 import ccxt
 import crypto_stream
 from dash.exceptions import PreventUpdate
-import rf_model
+import models
 import time
 import backtesting
 import dash_table.FormatTemplate as FormatTemplate
@@ -276,76 +276,58 @@ def get_backtest_fig(df, timeframe):
     fig["layout"] = get_fig_layout(**tickformat)
     return fig
 
+
+
+'''
+Callbacks starts
+'''
+
 #app.config.suppress_callback_exceptions = True
 @app.callback([Output('crypto-2-symbol', 'data'),
               Output('two-sec-interval', 'disabled'),
               Output('five-sec-interval', 'disabled')],
               [Input('trade-btn', 'n_clicks')],
-              [State('crypto-2-select-dropdown', 'value')])
-def reinitalize_crypto(n_clicks, crypto):
+              [State('crypto-2-select-dropdown', 'value'),
+              State('trade-model-select-dropdown', 'value')])
+def reinitalize_crypto(n_clicks, crypto, model):
     if(crypto==None or crypto==''):
         raise PreventUpdate
     crypto_stream.init_connection()
     #data = [{'close':0.0, "balance": 10000, "shares": 0, 'status':''}]
     return crypto, False, False
 
-@app.callback([Output('live-crypto-graph', 'figure'),
-              Output('live-signal-graph', 'figure')],
+@app.callback(Output('live-crypto-graph', 'figure'),
               [Input('two-sec-interval', 'n_intervals')],
               [State('crypto-2-symbol', 'data')])
 def update_close_scatter(n, crypto):
     df = crypto_stream.fetch_data(crypto)
-    signal_df = crypto_stream.generate_signals(df)
-    return get_close_fig(df), get_sma_fig(signal_df)
+    return get_close_fig(df)
 
-
-'''
-@app.callback(Output('live-signal-graph', 'figure'),
-              [Input('two-sec-interval', 'n_intervals')])
-def update_signal_scatter(n):
-    time.sleep(1)
-    df = crypto_stream.get_data_from_table()
-    signal_df = crypto_stream.generate_signals(df)
-    return get_sma_fig(signal_df)
-'''
 
 @app.callback([Output('stream-table', 'data'),
               Output('entry-exit-dict', 'data'),
-              Output('live-trade-graph', 'figure')],
+              Output('live-trade-graph', 'figure'),
+              Output('live-signal-graph', 'figure')],
               [Input('five-sec-interval', 'n_intervals')],
               [State('stream-table', 'data'),
-              State('entry-exit-dict', 'data')])
-def execute_trade(n_intervals, buy_sell_data, entry_exit_df):
+              State('entry-exit-dict', 'data'),
+              State('trade-model-select-dropdown', 'value')])
+def execute_trade(n_intervals, buy_sell_data, entry_exit_df, model):
     if entry_exit_df:
         entry_exit_df = pd.DataFrame.from_dict(entry_exit_df)
-    #entry_exit_df = rf_model.predict(entry_exit_df, 22)
+    is_sma = (model=='SMA10')
     entry_exit_df = crypto_stream.generate_signals(crypto_stream.get_data_from_table())
-    #sprint(len(entry_exit_df))
-    if entry_exit_df is None or len(entry_exit_df)<19: 
+    if not is_sma and len(entry_exit_df)>20:
+        entry_exit_df = models.predict(entry_exit_df, model, 20)
+    if len(entry_exit_df)<10: 
         raise PreventUpdate
     else:
         account= buy_sell_data[-1]
         account = crypto_stream.execute_trade_strategy(entry_exit_df, account)
-        if account==None:
-            raise PreventUpdate
-        buy_sell_data.append(account)
-    return buy_sell_data, entry_exit_df.to_dict('series'), get_trade_fig(entry_exit_df)
-
-'''@app.callback([Output('model-entry-exit', 'data'),
-              Output('live-trade-graph', 'figure')],
-              [Input('five-sec-interval', 'n_intervals')],
-              [State('model-entry-exit', 'data')])
-def execute_prediction(n_intervals, entry_exit_df):
-    if entry_exit_df:
-        entry_exit_df = pd.DataFrame.from_dict(entry_exit_df)
-    entry_exit_df = rf_model.predict(entry_exit_df, 22)
-    #entry_exit_df = crypto_stream.generate_signals(crypto_stream.get_data_from_table())
-    #sprint(len(entry_exit_df))
-    if entry_exit_df is None or len(entry_exit_df)<22: 
-        raise PreventUpdate
-    return entry_exit_df.to_dict('series'), get_trade_fig(entry_exit_df)'''
-
-
+        print(account)
+        if account:
+            buy_sell_data.append(account)
+    return buy_sell_data, entry_exit_df.to_dict('series'), get_trade_fig(entry_exit_df), get_sma_fig(entry_exit_df)
 
 @app.callback([Output("loading-output-1", "children"),
                Output('backtesting-results-container', 'style'),
@@ -363,6 +345,10 @@ def reinitalize_model(n_clicks, crypto, model_name, timeframe, initial_capital, 
     portfolio_metrics, trade_metrics, portfolio_evaluation = backtesting.main(crypto, model_name, timeframe, initial_capital, no_of_shares)
     return '', {'display':'block'},crypto, trade_metrics.to_dict("rows"), get_backtest_fig(portfolio_metrics, timeframe), portfolio_evaluation.reset_index().to_dict("rows")
 
+
+'''
+Callbacks ends
+'''
 
 def get_data_table(table_info):
     return dash_table.DataTable(
@@ -456,13 +442,13 @@ def get_numeric_input(id_name, value, title):
     id=f"{id_name}-input", className="setting-input", value=value, size=200, max=9999999
 )])
                 
-def build_top_panel():
+def build_trade_panel():
     return html.Div(
         id="top-section-container",
         className="row",
         children=[
             dcc.Store(id='crypto-2-symbol', storage_type='local', data=crypto_stream.SYMBOL),
-            dcc.Store(id='entry-exit-dict', storage_type='local'),
+            dcc.Store(id='entry-exit-dict'),
             # Metrics summary
             html.Div(
                 id="live-data-streaming",
@@ -484,6 +470,8 @@ def build_top_panel():
                     html.Br(),
                     get_dropdown('crypto-2', crypto_stream.get_crypto_symbols(), '', 'Crypto'),
                     html.Br(),
+                    get_dropdown('trade-model', models.MODEL_LIST , models.MODEL_LIST[0], 'Model'),
+                    html.Br(),
                     get_btn_div('trade', 'Trade'),
                     html.Br(),
                     #get_crypto_dropdown('crypto-2'),
@@ -495,7 +483,7 @@ def build_top_panel():
     )
 
 
-def build_tab_backtesting():
+def build_backtesting_panel():
     return html.Div([
         # Manually select metrics
         html.Div(
@@ -603,7 +591,7 @@ def build_tabs():
                         value="tab1",
                         className="custom-tab",
                         selected_className="custom-tab--selected",
-                        children=build_tab_backtesting()
+                        children=build_backtesting_panel()
                     ),
                     dcc.Tab(
                         id="Control-chart-tab",
@@ -611,7 +599,7 @@ def build_tabs():
                         value="tab2",
                         className="custom-tab",
                         selected_className="custom-tab--selected",
-                        children=build_top_panel()
+                        children=build_trade_panel()
                     ),
                 ],
             )
@@ -649,7 +637,9 @@ app.layout = html.Div(
     children=[
         build_banner(),
         # Interval component for live clock
-        dcc.Interval(id="two-sec-interval", disabled=True, interval=1 * 1000, n_intervals=0),dcc.Interval(id="five-sec-interval", disabled=True, interval=1 * 1000, n_intervals=0),
+        dcc.Interval(id="two-sec-interval-sma", disabled=True, interval=1 * 1000, n_intervals=0),
+        dcc.Interval(id="two-sec-interval", disabled=True, interval=1 * 1000, n_intervals=0),
+        dcc.Interval(id="five-sec-interval", disabled=True, interval=1 * 1000, n_intervals=0),
         dcc.Interval(
             id="interval-component",
             interval=2 * 1000,  # in milliseconds
@@ -671,5 +661,6 @@ app.layout = html.Div(
 
 # Running the server
 if __name__ == "__main__":
-    app.run_server(debug=True, port=8050)
+    #app.run_server(debug=True, port=8050)
+    app.run_server()
     
