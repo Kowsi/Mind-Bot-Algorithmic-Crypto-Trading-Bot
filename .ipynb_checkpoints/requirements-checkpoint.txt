@@ -8,6 +8,7 @@ dash==1.13.4
 numpy==1.18.1
 dash_daq==0.5.0
 plotly==4.6.0
+gunicorn==19.9.0
 Flask==1.1.2
 Flask-Compress==1.5.0
 MarkupSafe==1.1.1
@@ -16,5 +17,4 @@ dash_table==4.8.1
 dash_core_components==1.10.1
 scikit_learn==0.23.1
 numpy==1.18.1
-gunicorn==19.9.0
 python==3.7.7
