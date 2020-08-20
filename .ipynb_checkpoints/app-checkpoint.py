@@ -170,7 +170,7 @@ def candlestick_trace(df, col):
         name="candlestick",
     )
 
-def get_fig_layout(tickformat="%H:%M:%S"):
+def get_fig_layout(tickformat="%H:%M:%S", xlabel='Time', ylabel='Closing Price'):
     layout = dict(margin=dict(t=40),
         hovermode="closest",
         #uirevision=True,
@@ -183,14 +183,14 @@ def get_fig_layout(tickformat="%H:%M:%S"):
         xaxis={
             "zeroline": False,
             "showgrid": False,
-            "title": "Closing Price",
+            "title": xlabel,
             "showline": False,
             #"domain": [0, 0.8],
             "tickformat" : tickformat,
             "titlefont": {"color": "darkgray"},
         },
         yaxis={
-            "title": 'Time',
+            "title": ylabel,
             "showgrid": False,
             "showline": False,
             "zeroline": False,
@@ -273,7 +273,7 @@ def get_backtest_fig(df, timeframe):
     fig.add_traces([line_trace(df, 'Portfolio Total', '#b2c2c0'), 
                     entry_marker, 
                     exit_marker])
-    fig["layout"] = get_fig_layout(**tickformat)
+    fig["layout"] = get_fig_layout(**tickformat, ylabel='Time', xlabel='Closing Price')
     return fig
 
 
@@ -595,7 +595,7 @@ def build_tabs():
                     ),
                     dcc.Tab(
                         id="Control-chart-tab",
-                        label="Control Charts Dashboard",
+                        label="Trading Dashboard",
                         value="tab2",
                         className="custom-tab",
                         selected_className="custom-tab--selected",
