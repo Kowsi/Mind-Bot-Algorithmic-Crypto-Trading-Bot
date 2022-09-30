@@ -1,7 +1,7 @@
 dash_html_components==1.0.3
 Click==7.0
 ccxt==1.30.38
-joblib==0.14.1
+joblib==1.2.0
 pandas==1.0.3
 requests==2.23.0
 dash==1.13.4
